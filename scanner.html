@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ماسح الباركود - مستوحى من تيري</title>
     
     <script src="https://unpkg.com/html5-qrcode"></script>
@@ -11,7 +11,7 @@
     <style>
         /* الألوان المستوحاة من Terry.sa */
         :root {
-            --primary-gold: #c5a059; /* لون ذهبي/برتقالي مقارب للموقع */
+            --primary-gold: #c5a059;
             --bg-light: #ffffff;
             --text-dark: #333333;
             --border-color: #eeeeee;
@@ -22,7 +22,7 @@
             background-color: #f9f9f9;
             color: var(--text-dark);
             margin: 0;
-            padding: 20px;
+            padding: 10px; /* تقليل الهوامش للجوال */
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -32,16 +32,18 @@
             background: var(--bg-light);
             max-width: 700px;
             width: 100%;
-            padding: 30px;
+            padding: 15px;
             border-radius: 12px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.05);
             text-align: center;
+            box-sizing: border-box;
         }
 
         h1 {
+            font-size: 1.5rem;
             color: var(--text-dark);
             font-weight: 600;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
             border-bottom: 2px solid var(--primary-gold);
             padding-bottom: 10px;
             display: inline-block;
@@ -52,10 +54,11 @@
             border-radius: 10px;
             overflow: hidden;
             border: 2px solid var(--border-color) !important;
+            background: #000; /* خلفية سوداء قبل تحميل الكاميرا */
         }
 
         .controls {
-            margin-top: 25px;
+            margin-top: 20px;
             display: flex;
             gap: 10px;
             justify-content: center;
@@ -66,32 +69,29 @@
             background-color: var(--primary-gold);
             color: white;
             border: none;
-            padding: 12px 25px;
+            padding: 10px 20px;
             border-radius: 50px;
             cursor: pointer;
-            font-size: 16px;
+            font-size: 14px;
             font-weight: bold;
             transition: opacity 0.3s;
         }
 
-        button:hover {
-            opacity: 0.8;
-        }
+        button:hover { opacity: 0.8; }
 
-        button.download-btn {
-            background-color: #2e7d32; /* لون الإكسل الأخضر */
-        }
+        button.download-btn { background-color: #2e7d32; }
 
         #result-table {
             width: 100%;
             margin-top: 25px;
             border-collapse: collapse;
             background: white;
+            font-size: 13px; /* تصغير الخط للجوال */
         }
 
         #result-table th, #result-table td {
             border: 1px solid var(--border-color);
-            padding: 12px;
+            padding: 8px;
             text-align: center;
         }
 
@@ -104,11 +104,11 @@
             margin: 10px 0;
             font-size: 14px;
             color: #666;
+            font-weight: bold;
         }
 
-        /* تنسيق حقل الكمية */
         .qty-input {
-            width: 60px;
+            width: 45px;
             padding: 5px;
             text-align: center;
             border: 1px solid var(--primary-gold);
@@ -123,20 +123,19 @@
         
         <div id="reader"></div>
         
-        <div class="status" id="status">جاهز للمسح...</div>
+        <div class="status" id="status">جاري طلب إذن الكاميرا...</div>
 
         <div class="controls">
-            <button onclick="downloadExcel()" class="download-btn">تحميل ملف Excel</button>
+            <button onclick="downloadExcel()" class="download-btn">تحميل Excel</button>
             <button onclick="clearList()" style="background:#888;">مسح القائمة</button>
         </div>
 
         <table id="result-table">
             <thead>
                 <tr>
-                    <th>الرقم</th>
-                    <th>كود الباركود</th>
+                    <th>الباركود</th>
                     <th>الكمية</th>
-                    <th>آخر وقت مسح</th>
+                    <th>الوقت</th>
                 </tr>
             </thead>
             <tbody id="table-body">
@@ -147,39 +146,32 @@
     <script>
         let scannedData = [];
 
-        // إعداد الماسح الضوئي
         function onScanSuccess(decodedText, decodedResult) {
             const now = new Date();
             const timeStr = now.toLocaleTimeString('ar-SA');
             
-            // البحث إذا كان الباركود موجود مسبقاً في القائمة
             const existingEntry = scannedData.find(item => item.code === decodedText);
 
             if (existingEntry) {
-                // إذا وجدناه، نزيد الكمية ونحدث الوقت
                 existingEntry.qty += 1;
                 existingEntry.time = timeStr;
-                document.getElementById('status').innerText = "تحديث كمية: " + decodedText;
+                document.getElementById('status').innerText = "تحديث: " + decodedText;
             } else {
-                // إذا لم يوجد، نضيفه كمدخل جديد
                 const entry = {
-                    id: scannedData.length + 1,
                     code: decodedText,
                     qty: 1,
                     time: timeStr
                 };
-                scannedData.unshift(entry); // إضافة في البداية
-                document.getElementById('status').innerText = "تم مسح جديد: " + decodedText;
+                scannedData.unshift(entry);
+                document.getElementById('status').innerText = "جديد: " + decodedText;
             }
             
             updateTable();
             
-            // صوت تنبيه بسيط
             const audio = new Audio('https://www.soundjay.com/buttons/beep-07a.mp3');
-            audio.play();
+            audio.play().catch(e => console.log("Audio play blocked"));
         }
 
-        // تحديث الكمية يدوياً من الجدول
         function updateQty(index, newQty) {
             const val = parseInt(newQty);
             if (!isNaN(val) && val >= 0) {
@@ -191,7 +183,6 @@
             const tbody = document.getElementById('table-body');
             tbody.innerHTML = scannedData.map((item, index) => `
                 <tr>
-                    <td>${item.id}</td>
                     <td>${item.code}</td>
                     <td>
                         <input type="number" class="qty-input" 
@@ -203,42 +194,52 @@
             `).join('');
         }
 
-        // تحويل البيانات إلى Excel
         function downloadExcel() {
             if (scannedData.length === 0) {
-                alert("لا توجد بيانات لتحميلها!");
+                alert("لا توجد بيانات!");
                 return;
             }
-
-            // تجهيز البيانات للتحميل (ترتيب الأعمدة)
             const dataToExport = scannedData.map(item => ({
-                "الرقم": item.id,
-                "كود الباركود": item.code,
+                "الباركود": item.code,
                 "الكمية": item.qty,
-                "الوقت": item.time
+                "آخر وقت": item.time
             }));
-
             const worksheet = XLSX.utils.json_to_sheet(dataToExport);
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "Barcodes");
-            
-            // تحميل الملف
-            XLSX.writeFile(workbook, "Scanned_Barcodes.xlsx");
+            XLSX.writeFile(workbook, "Inventory.xlsx");
         }
 
         function clearList() {
-            if (confirm("هل تريد مسح جميع البيانات؟")) {
+            if (confirm("مسح الكل؟")) {
                 scannedData = [];
                 updateTable();
                 document.getElementById('status').innerText = "تم مسح القائمة.";
             }
         }
 
-        // تشغيل الكاميرا عند تحميل الصفحة
+        // إعدادات الكاميرا للجوال
         const html5QrcodeScanner = new Html5QrcodeScanner(
-            "reader", { fps: 10, qrbox: 250 }
+            "reader", 
+            { 
+                fps: 15, 
+                qrbox: { width: 250, height: 150 }, // حجم صندوق المسح
+                aspectRatio: 1.0,
+                showTorchButtonIfSupported: true // زر الكشاف للجوال
+            },
+            /* verbose= */ false
         );
-        html5QrcodeScanner.render(onScanSuccess);
+
+        html5QrcodeScanner.render(onScanSuccess, (errorMessage) => {
+            // تجاهل أخطاء البحث المستمر لتجنب تجميد الجوال
+        });
+
+        // التأكد من أن حالة الكاميرا تظهر للمستخدم
+        setTimeout(() => {
+            if (document.getElementById('reader__status_span')) {
+                document.getElementById('status').innerText = "جاهز للمسح";
+            }
+        }, 2000);
     </script>
 
 </body>

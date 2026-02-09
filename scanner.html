@@ -91,13 +91,13 @@
         }
 
         .qty-badge {
-            background: #c5a059;
+            background: #000;
             color: #fff;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 13px;
+            padding: 2px 10px;
+            border-radius: 5px;
+            font-size: 14px;
             font-weight: bold;
-            margin-right: 8px;
+            margin-top: 5px;
             display: inline-block;
         }
 
@@ -134,8 +134,8 @@
         <table>
             <thead>
                 <tr>
-                    <th>الباركود (العدد)</th>
-                    <th>آخر تحديث</th>
+                    <th>الباركود والعدد</th>
+                    <th>الوقت</th>
                 </tr>
             </thead>
             <tbody id="table-body"></tbody>
@@ -145,7 +145,8 @@
     <script>
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxIOyX_jvCZo5RfxnjGhqz3FhKEOVfibaTAmMXuuRT1U1vNh57QdjjkKl-NgpAnEwrRGQ/exec";
         
-        let inventoryMap = JSON.parse(localStorage.getItem('terry_map_data')) || {};
+        // استخدام Map للبيانات لضمان عدم التكرار نهائياً
+        let inventoryMap = new Map(JSON.parse(localStorage.getItem('terry_inventory_v3')) || []);
         let html5QrCode;
         let isProcessing = false;
         let isTorchOn = false;
@@ -190,32 +191,32 @@
             const timeStr = now.toLocaleTimeString('ar-SA');
             const cleanCode = String(decodedText).trim();
 
-            // منطق دمج البيانات الصارم:
-            if (inventoryMap[cleanCode]) {
-                // إذا كان موجوداً، زد العدد وحدث الوقت فقط
-                inventoryMap[cleanCode].qty = (inventoryMap[cleanCode].qty || 0) + 1;
-                inventoryMap[cleanCode].time = timeStr;
-                inventoryMap[cleanCode].last_ts = Date.now(); // للترتيب
+            // التحقق من وجود الكود وتحديثه
+            if (inventoryMap.has(cleanCode)) {
+                let existing = inventoryMap.get(cleanCode);
+                existing.qty += 1;
+                existing.time = timeStr;
+                existing.ts = Date.now();
+                inventoryMap.set(cleanCode, existing);
             } else {
-                // إذا كان جديداً، أنشئه لأول مرة
-                inventoryMap[cleanCode] = { 
-                    code: cleanCode, 
-                    qty: 1, 
+                inventoryMap.set(cleanCode, {
+                    code: cleanCode,
+                    qty: 1,
                     time: timeStr,
-                    last_ts: Date.now()
-                };
+                    ts: Date.now()
+                });
             }
             
-            saveAndRender();
+            saveData();
+            updateTable();
             await syncToGoogle({ code: cleanCode, qty: 1, time: timeStr });
             
-            // قفل المسح لمدة ثانية ونصف لمنع التكرار التلقائي السريع جداً
             setTimeout(() => { isProcessing = false; }, 1500);
         }
 
-        function saveAndRender() {
-            localStorage.setItem('terry_map_data', JSON.stringify(inventoryMap));
-            updateTable();
+        function saveData() {
+            // حفظ الـ Map بعد تحويلها لمصفوفة
+            localStorage.setItem('terry_inventory_v3', JSON.stringify(Array.from(inventoryMap.entries())));
         }
 
         async function syncToGoogle(payload) {
@@ -230,34 +231,33 @@
         function updateTable() {
             const tbody = document.getElementById('table-body');
             
-            // تحويل الـ Object إلى مصفوفة وترتيبها من الأحدث للأقدم بناءً على الـ Timestamp
-            const items = Object.values(inventoryMap).sort((a, b) => b.last_ts - a.last_ts);
+            // تحويل البيانات لمصفوفة وترتيبها بالأحدث
+            const items = Array.from(inventoryMap.values()).sort((a, b) => b.ts - a.ts);
             
             if (items.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="2">لا توجد بيانات</td></tr>';
                 return;
             }
 
-            // إنشاء الجدول: هنا نضمن أن كل كود يظهر مرة واحدة فقط مع عدده الكلي
             tbody.innerHTML = items.map(item => `
-                <tr>
+                <tr id="row-${item.code}">
                     <td>
-                        <div style="font-weight: bold; font-size: 15px;">${item.code}</div>
-                        <span class="qty-badge">العدد: ${item.qty}</span>
+                        <div style="font-weight: bold; color: #333;">${item.code}</div>
+                        <div class="qty-badge">x ${item.qty}</div>
                     </td>
-                    <td style="color: #666; font-size: 12px;">${item.time}</td>
+                    <td style="font-size: 11px; color: #888;">${item.time}</td>
                 </tr>
             `).join('');
         }
 
         function downloadExcel() {
-            const items = Object.values(inventoryMap);
+            const items = Array.from(inventoryMap.values());
             if (items.length === 0) return alert("القائمة فارغة!");
             
             const dataToExport = items.map(item => ({
                 "الباركود": item.code,
-                "إجمالي العدد": item.qty,
-                "آخر وقت مسح": item.time
+                "العدد": item.qty,
+                "الوقت": item.time
             }));
 
             const ws = XLSX.utils.json_to_sheet(dataToExport);
@@ -268,8 +268,8 @@
 
         function clearAll() {
             if (confirm("هل تريد مسح كافة البيانات؟")) {
-                inventoryMap = {};
-                localStorage.removeItem('terry_map_data');
+                inventoryMap.clear();
+                localStorage.removeItem('terry_inventory_v3');
                 updateTable();
                 document.getElementById('status-bar').innerText = "تم المسح";
             }

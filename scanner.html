@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ماسح الباركود - Terry</title>
+    <title>ماسح الباركود - Terry Cloud</title>
     
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -14,6 +14,8 @@
             --bg-light: #ffffff;
             --text-dark: #333333;
             --border-color: #eeeeee;
+            --success-green: rgba(46, 125, 50, 0.2);
+            --error-red: rgba(211, 47, 47, 0.2);
         }
 
         body {
@@ -26,6 +28,7 @@
             flex-direction: column;
             align-items: center;
             min-height: 100vh;
+            transition: background-color 0.3s ease; /* لإضافة تأثير الوميض */
         }
 
         .container {
@@ -71,7 +74,6 @@
             margin: 10px 0;
             font-size: 14px;
             font-weight: bold;
-            color: #666;
         }
 
         table {
@@ -88,16 +90,26 @@
         }
 
         .btn-start { background-color: #007bff; width: 100%; padding: 15px; font-size: 16px; }
+        
+        /* حالة المزامنة */
+        .sync-indicator {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            display: inline-block;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h1>ماسح الباركود - حفظ تلقائي</h1>
+        <h1>ماسح Terry السريع</h1>
         
         <div id="reader"></div>
         
-        <div id="status">البيانات محفوظة تلقائياً في المتصفح</div>
+        <div id="status">جاهز للمسح التلقائي</div>
+        <div id="sync-status" class="sync-indicator"></div>
 
         <div class="controls">
             <button id="start-button" onclick="startCamera()" class="btn-start">🚀 ابدأ المسح</button>
@@ -109,8 +121,8 @@
             <thead>
                 <tr>
                     <th>الباركود</th>
-                    <th>الكمية الإجمالية</th>
-                    <th>آخر تحديث</th>
+                    <th>العدد</th>
+                    <th>آخر وقت</th>
                 </tr>
             </thead>
             <tbody id="table-body"></tbody>
@@ -118,86 +130,101 @@
     </div>
 
     <script>
-        // تحميل البيانات من الذاكرة المحلية عند فتح الصفحة
-        let scannedData = JSON.parse(localStorage.getItem('savedInventory')) || [];
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw79jBnbFC-oIJX-OKzVwQBXnToIrjXJTC2msv-hf25Hire6dQSr09kvZSAx2OslFPviw/exec";
+
+        function getSavedData() {
+            const data = localStorage.getItem('inventory_v1');
+            return data ? JSON.parse(data) : [];
+        }
+
+        let scannedData = getSavedData();
         let html5QrCode;
-        let isScanning = true;
+        let isProcessing = false; // لمنع المسح المزدوج في نفس اللحظة
 
         const beepSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
 
-        // تحديث الجدول فور تحميل الصفحة بالبيانات القديمة
-        window.onload = () => {
-            updateTable();
-        };
+        window.addEventListener('DOMContentLoaded', updateTable);
 
         async function startCamera() {
-            if (!html5QrCode) {
-                html5QrCode = new Html5Qrcode("reader");
-            }
+            if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
             document.getElementById('start-button').style.display = 'none';
             
             try {
                 await html5QrCode.start(
                     { facingMode: "environment" }, 
-                    { fps: 10, qrbox: { width: 250, height: 150 } },
+                    { fps: 20, qrbox: { width: 250, height: 150 } },
                     onScanSuccess
                 );
-                document.getElementById('status').innerText = "وجه الكاميرا نحو الباركود";
             } catch (err) {
                 alert("خطأ في الكاميرا: " + err);
             }
         }
 
         async function onScanSuccess(decodedText) {
-            if (!isScanning) return; 
-            
-            isScanning = false; 
-            beepSound.play().catch(() => {}); 
+            if (isProcessing) return; 
+            isProcessing = true; 
 
-            setTimeout(() => {
-                let qtyInput = prompt(`الباركود: ${decodedText}\nأدخل الكمية لإضافتها:`, "1");
-                
-                if (qtyInput !== null && qtyInput !== "") {
-                    let addedQuantity = parseInt(qtyInput) || 0;
-                    
-                    if (addedQuantity > 0) {
-                        const now = new Date();
-                        const timeStr = now.toLocaleTimeString('ar-SA');
-                        
-                        const existingItem = scannedData.find(item => item.code === decodedText);
-                        
-                        if (existingItem) {
-                            existingItem.qty += addedQuantity;
-                            existingItem.time = timeStr;
-                            
-                            // نقل المنتج المحدث للأعلى
-                            const index = scannedData.indexOf(existingItem);
-                            scannedData.splice(index, 1);
-                            scannedData.unshift(existingItem);
-                        } else {
-                            scannedData.unshift({
-                                code: decodedText,
-                                qty: addedQuantity,
-                                time: timeStr
-                            });
-                        }
-                        
-                        saveAndRefresh();
-                        document.getElementById('status').innerText = "تم الحفظ والتحديث ✅";
-                    }
-                }
-                isScanning = true; 
-            }, 100);
+            beepSound.play().catch(() => {});
+
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('ar-SA');
+            
+            // 1. تحديث البيانات محلياً (زيادة 1 تلقائياً)
+            const existingItem = scannedData.find(item => item.code === decodedText);
+            if (existingItem) {
+                existingItem.qty += 1;
+                existingItem.time = timeStr;
+                const index = scannedData.indexOf(existingItem);
+                scannedData.splice(index, 1);
+                scannedData.unshift(existingItem);
+            } else {
+                scannedData.unshift({ code: decodedText, qty: 1, time: timeStr });
+            }
+            
+            localStorage.setItem('inventory_v1', JSON.stringify(scannedData));
+            updateTable();
+
+            // 2. محاولة المزامنة مع جوجل
+            const syncEntry = { code: decodedText, qty: 1, time: timeStr };
+            await sendToGoogleSheets(syncEntry);
+
+            // إتاحة المسح التالي بعد ثانية واحدة لمنع تكرار نفس المنتج بالخطأ
+            setTimeout(() => { isProcessing = false; }, 1000);
         }
 
-        // دالة لحفظ البيانات في ذاكرة المتصفح وتحديث الجدول
-        function saveAndRefresh() {
-            localStorage.setItem('savedInventory', JSON.stringify(scannedData));
-            updateTable();
+        async function sendToGoogleSheets(entry) {
+            const indicator = document.getElementById('sync-status');
+            
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: "POST",
+                    mode: "no-cors",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(entry)
+                });
+
+                // تأثير النجاح (أخضر خافت)
+                document.body.style.backgroundColor = "var(--success-green)";
+                indicator.innerText = "تمت المزامنة بنجاح ✅";
+                indicator.style.color = "#2e7d32";
+                
+                setTimeout(() => { document.body.style.backgroundColor = "#f9f9f9"; }, 500);
+            } catch (error) {
+                // تأثير الفشل (أحمر خافت)
+                document.body.style.backgroundColor = "var(--error-red)";
+                indicator.innerText = "فشلت المزامنة مع جوجل ❌";
+                indicator.style.color = "#d32f2f";
+                
+                setTimeout(() => { document.body.style.backgroundColor = "#f9f9f9"; }, 500);
+            }
         }
 
         function updateTable() {
             const tbody = document.getElementById('table-body');
+            if (scannedData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3">لا توجد بيانات</td></tr>';
+                return;
+            }
             tbody.innerHTML = scannedData.map((item) => `
                 <tr>
                     <td>${item.code}</td>
@@ -208,19 +235,17 @@
         }
 
         function downloadExcel() {
-            if (scannedData.length === 0) return alert("لا توجد بيانات!");
             const ws = XLSX.utils.json_to_sheet(scannedData);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Inventory");
-            XLSX.writeFile(wb, "Inventory_Report.xlsx");
+            XLSX.writeFile(wb, "Inventory_Backup.xlsx");
         }
 
         function clearList() {
-            if (confirm("سيتم حذف جميع البيانات المحفوظة، هل أنت متأكد؟")) {
+            if (confirm("هل تريد مسح القائمة من الهاتف؟")) {
                 scannedData = [];
-                localStorage.removeItem('savedInventory');
+                localStorage.removeItem('inventory_v1');
                 updateTable();
-                document.getElementById('status').innerText = "تم مسح الذاكرة.";
             }
         }
     </script>

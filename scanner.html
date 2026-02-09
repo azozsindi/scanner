@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ماسح الباركود - مستوحى من تيري</title>
+    
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        /* الألوان المستوحاة من Terry.sa */
+        :root {
+            --primary-gold: #c5a059; /* لون ذهبي/برتقالي مقارب للموقع */
+            --bg-light: #ffffff;
+            --text-dark: #333333;
+            --border-color: #eeeeee;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f9f9f9;
+            color: var(--text-dark);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            background: var(--bg-light);
+            max-width: 600px;
+            width: 100%;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+
+        h1 {
+            color: var(--text-dark);
+            font-weight: 600;
+            margin-bottom: 25px;
+            border-bottom: 2px solid var(--primary-gold);
+            padding-bottom: 10px;
+            display: inline-block;
+        }
+
+        #reader {
+            width: 100%;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 2px solid var(--border-color) !important;
+        }
+
+        .controls {
+            margin-top: 25px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background-color: var(--primary-gold);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: opacity 0.3s;
+        }
+
+        button:hover {
+            opacity: 0.8;
+        }
+
+        button.download-btn {
+            background-color: #2e7d32; /* لون الإكسل الأخضر */
+        }
+
+        #result-table {
+            width: 100%;
+            margin-top: 25px;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        #result-table th, #result-table td {
+            border: 1px solid var(--border-color);
+            padding: 12px;
+            text-align: center;
+        }
+
+        #result-table th {
+            background-color: #fcfcfc;
+            color: var(--primary-gold);
+        }
+
+        .status {
+            margin: 10px 0;
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>ماسح الباركود الذكي</h1>
+        
+        <div id="reader"></div>
+        
+        <div class="status" id="status">جاهز للمسح...</div>
+
+        <div class="controls">
+            <button onclick="downloadExcel()" class="download-btn">تحميل ملف Excel</button>
+            <button onclick="clearList()" style="background:#888;">مسح القائمة</button>
+        </div>
+
+        <table id="result-table">
+            <thead>
+                <tr>
+                    <th>الرقم</th>
+                    <th>كود الباركود</th>
+                    <th>الوقت</th>
+                </tr>
+            </thead>
+            <tbody id="table-body">
+                </tbody>
+        </table>
+    </div>
+
+    <script>
+        let scannedData = [];
+
+        // إعداد الماسح الضوئي
+        function onScanSuccess(decodedText, decodedResult) {
+            // منع تكرار نفس الكود بسرعة خلف بعضها
+            if (scannedData.length > 0 && scannedData[0].code === decodedText) return;
+
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('ar-SA');
+            
+            // إضافة البيانات للمصفوفة
+            const entry = {
+                id: scannedData.length + 1,
+                code: decodedText,
+                time: timeStr
+            };
+            
+            scannedData.unshift(entry); // إضافة في البداية
+            updateTable();
+            
+            document.getElementById('status').innerText = "تم مسح: " + decodedText;
+            
+            // صوت تنبيه بسيط (اختياري)
+            const audio = new Audio('https://www.soundjay.com/buttons/beep-07a.mp3');
+            audio.play();
+        }
+
+        function updateTable() {
+            const tbody = document.getElementById('table-body');
+            tbody.innerHTML = scannedData.map(item => `
+                <tr>
+                    <td>${item.id}</td>
+                    <td>${item.code}</td>
+                    <td>${item.time}</td>
+                </tr>
+            `).join('');
+        }
+
+        // تحويل البيانات إلى Excel
+        function downloadExcel() {
+            if (scannedData.length === 0) {
+                alert("لا توجد بيانات لتحميلها!");
+                return;
+            }
+
+            const worksheet = XLSX.utils.json_to_sheet(scannedData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Barcodes");
+            
+            // تحميل الملف
+            XLSX.writeFile(workbook, "Scanned_Barcodes.xlsx");
+        }
+
+        function clearList() {
+            if (confirm("هل تريد مسح جميع البيانات؟")) {
+                scannedData = [];
+                updateTable();
+                document.getElementById('status').innerText = "تم مسح القائمة.";
+            }
+        }
+
+        // تشغيل الكاميرا عند تحميل الصفحة
+        const html5QrcodeScanner = new Html5QrcodeScanner(
+            "reader", { fps: 10, qrbox: 250 }
+        );
+        html5QrcodeScanner.render(onScanSuccess);
+    </script>
+
+</body>
+</html>

@@ -93,6 +93,17 @@
             text-align: center;
         }
 
+        /* تمييز العدد المجمع */
+        .qty-badge {
+            background: var(--primary-gold);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+            margin-right: 5px;
+            display: inline-block;
+        }
+
         .torch-btn {
             margin-top: 10px;
             background: #444;
@@ -126,7 +137,7 @@
         <table>
             <thead>
                 <tr>
-                    <th>الباركود</th>
+                    <th>الباركود (العدد)</th>
                     <th>آخر تحديث</th>
                 </tr>
             </thead>
@@ -184,7 +195,7 @@
             } catch (e) { alert("الفلاش غير مدعوم"); }
         }
 
-        async function onScanSuccess(code) {
+        async function onScanSuccess(decodedText) {
             if (isProcessing) return;
             isProcessing = true;
             
@@ -192,25 +203,31 @@
             const now = new Date();
             const timeStr = now.toLocaleTimeString('ar-SA');
             
-            // --- تعديل منطق التدبيل ---
-            let existingItem = inventory.find(i => i.code === String(code).trim());
+            // تنظيف الكود تماماً وتحويله لنص ثابت للمقارنة
+            const cleanCode = String(decodedText).trim();
+
+            // البحث عن الكود في المصفوفة
+            let itemIndex = inventory.findIndex(i => String(i.code).trim() === cleanCode);
             
-            if (existingItem) {
-                // إذا وجد الكود، نزيد العدد ونحدث الوقت فقط
-                existingItem.qty = (existingItem.qty || 0) + 1;
-                existingItem.time = timeStr;
+            if (itemIndex !== -1) {
+                // الكود موجود مسبقاً -> تحديث العدد والوقت
+                inventory[itemIndex].qty = (Number(inventory[itemIndex].qty) || 0) + 1;
+                inventory[itemIndex].time = timeStr;
                 
-                // نقله لأعلى القائمة (اختياري)
-                const index = inventory.indexOf(existingItem);
-                inventory.splice(index, 1);
-                inventory.unshift(existingItem);
+                // نقل العنصر المحدث للقمة
+                const updatedItem = inventory.splice(itemIndex, 1)[0];
+                inventory.unshift(updatedItem);
             } else {
-                // كود جديد تماماً
-                inventory.unshift({ code: String(code).trim(), qty: 1, time: timeStr });
+                // كود جديد -> إضافة سطر جديد
+                inventory.unshift({ 
+                    code: cleanCode, 
+                    qty: 1, 
+                    time: timeStr 
+                });
             }
             
             saveAndUpdate();
-            await syncToGoogle({ code: code, qty: 1, time: timeStr });
+            await syncToGoogle({ code: cleanCode, qty: 1, time: timeStr });
             
             setTimeout(() => { isProcessing = false; }, 1200);
         }
@@ -247,10 +264,13 @@
                 tbody.innerHTML = '<tr><td colspan="2">لا توجد بيانات محفوظة</td></tr>';
                 return;
             }
-            // الجدول الآن يعرض كل باركود فريد في سطر واحد فقط
+            // الجدول يظهر الباركود وبجانبه العدد المجمع في حال تكراره
             tbody.innerHTML = inventory.map(item => `
                 <tr>
-                    <td>${item.code}</td>
+                    <td>
+                        ${item.code} 
+                        ${item.qty > 1 ? `<span class="qty-badge">x${item.qty}</span>` : ''}
+                    </td>
                     <td>${item.time}</td>
                 </tr>
             `).join('');

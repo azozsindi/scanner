@@ -30,7 +30,7 @@
 
         .container {
             background: var(--bg-light);
-            max-width: 600px;
+            max-width: 700px;
             width: 100%;
             padding: 30px;
             border-radius: 12px;
@@ -105,6 +105,15 @@
             font-size: 14px;
             color: #666;
         }
+
+        /* تنسيق حقل الكمية */
+        .qty-input {
+            width: 60px;
+            padding: 5px;
+            text-align: center;
+            border: 1px solid var(--primary-gold);
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
@@ -126,11 +135,12 @@
                 <tr>
                     <th>الرقم</th>
                     <th>كود الباركود</th>
-                    <th>الوقت</th>
+                    <th>الكمية</th>
+                    <th>آخر وقت مسح</th>
                 </tr>
             </thead>
             <tbody id="table-body">
-                </tbody>
+            </tbody>
         </table>
     </div>
 
@@ -139,35 +149,55 @@
 
         // إعداد الماسح الضوئي
         function onScanSuccess(decodedText, decodedResult) {
-            // منع تكرار نفس الكود بسرعة خلف بعضها
-            if (scannedData.length > 0 && scannedData[0].code === decodedText) return;
-
             const now = new Date();
             const timeStr = now.toLocaleTimeString('ar-SA');
             
-            // إضافة البيانات للمصفوفة
-            const entry = {
-                id: scannedData.length + 1,
-                code: decodedText,
-                time: timeStr
-            };
+            // البحث إذا كان الباركود موجود مسبقاً في القائمة
+            const existingEntry = scannedData.find(item => item.code === decodedText);
+
+            if (existingEntry) {
+                // إذا وجدناه، نزيد الكمية ونحدث الوقت
+                existingEntry.qty += 1;
+                existingEntry.time = timeStr;
+                document.getElementById('status').innerText = "تحديث كمية: " + decodedText;
+            } else {
+                // إذا لم يوجد، نضيفه كمدخل جديد
+                const entry = {
+                    id: scannedData.length + 1,
+                    code: decodedText,
+                    qty: 1,
+                    time: timeStr
+                };
+                scannedData.unshift(entry); // إضافة في البداية
+                document.getElementById('status').innerText = "تم مسح جديد: " + decodedText;
+            }
             
-            scannedData.unshift(entry); // إضافة في البداية
             updateTable();
             
-            document.getElementById('status').innerText = "تم مسح: " + decodedText;
-            
-            // صوت تنبيه بسيط (اختياري)
+            // صوت تنبيه بسيط
             const audio = new Audio('https://www.soundjay.com/buttons/beep-07a.mp3');
             audio.play();
         }
 
+        // تحديث الكمية يدوياً من الجدول
+        function updateQty(index, newQty) {
+            const val = parseInt(newQty);
+            if (!isNaN(val) && val >= 0) {
+                scannedData[index].qty = val;
+            }
+        }
+
         function updateTable() {
             const tbody = document.getElementById('table-body');
-            tbody.innerHTML = scannedData.map(item => `
+            tbody.innerHTML = scannedData.map((item, index) => `
                 <tr>
                     <td>${item.id}</td>
                     <td>${item.code}</td>
+                    <td>
+                        <input type="number" class="qty-input" 
+                               value="${item.qty}" 
+                               onchange="updateQty(${index}, this.value)">
+                    </td>
                     <td>${item.time}</td>
                 </tr>
             `).join('');
@@ -180,7 +210,15 @@
                 return;
             }
 
-            const worksheet = XLSX.utils.json_to_sheet(scannedData);
+            // تجهيز البيانات للتحميل (ترتيب الأعمدة)
+            const dataToExport = scannedData.map(item => ({
+                "الرقم": item.id,
+                "كود الباركود": item.code,
+                "الكمية": item.qty,
+                "الوقت": item.time
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(dataToExport);
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "Barcodes");
             

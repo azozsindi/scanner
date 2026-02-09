@@ -91,11 +91,12 @@
         }
 
         .qty-badge {
-            background: #000;
+            background: #c5a059;
             color: #fff;
             padding: 2px 8px;
             border-radius: 10px;
-            font-size: 12px;
+            font-size: 13px;
+            font-weight: bold;
             margin-right: 8px;
             display: inline-block;
         }
@@ -189,24 +190,26 @@
             const timeStr = now.toLocaleTimeString('ar-SA');
             const cleanCode = String(decodedText).trim();
 
-            // التعديل هنا: نتحقق من وجود الكود ونحدثه بشكل صحيح
+            // منطق دمج البيانات الصارم:
             if (inventoryMap[cleanCode]) {
-                inventoryMap[cleanCode].qty += 1;
+                // إذا كان موجوداً، زد العدد وحدث الوقت فقط
+                inventoryMap[cleanCode].qty = (inventoryMap[cleanCode].qty || 0) + 1;
                 inventoryMap[cleanCode].time = timeStr;
-                inventoryMap[cleanCode].timestamp = Date.now(); // أضفنا تايم ستامب للترتيب الصحيح
+                inventoryMap[cleanCode].last_ts = Date.now(); // للترتيب
             } else {
+                // إذا كان جديداً، أنشئه لأول مرة
                 inventoryMap[cleanCode] = { 
                     code: cleanCode, 
                     qty: 1, 
                     time: timeStr,
-                    timestamp: Date.now() 
+                    last_ts: Date.now()
                 };
             }
             
             saveAndRender();
             await syncToGoogle({ code: cleanCode, qty: 1, time: timeStr });
             
-            // تأخير بسيط لمنع المسح المتكرر جداً في نفس اللحظة
+            // قفل المسح لمدة ثانية ونصف لمنع التكرار التلقائي السريع جداً
             setTimeout(() => { isProcessing = false; }, 1500);
         }
 
@@ -226,21 +229,23 @@
 
         function updateTable() {
             const tbody = document.getElementById('table-body');
-            // تحويل الـ Map إلى Array وترتيبها بحيث يظهر أحدث باركود تم مسحه في الأعلى
-            const items = Object.values(inventoryMap).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            
+            // تحويل الـ Object إلى مصفوفة وترتيبها من الأحدث للأقدم بناءً على الـ Timestamp
+            const items = Object.values(inventoryMap).sort((a, b) => b.last_ts - a.last_ts);
             
             if (items.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="2">لا توجد بيانات</td></tr>';
                 return;
             }
 
+            // إنشاء الجدول: هنا نضمن أن كل كود يظهر مرة واحدة فقط مع عدده الكلي
             tbody.innerHTML = items.map(item => `
                 <tr>
                     <td>
-                        <strong>${item.code}</strong> 
-                        <span class="qty-badge">x${item.qty}</span>
+                        <div style="font-weight: bold; font-size: 15px;">${item.code}</div>
+                        <span class="qty-badge">العدد: ${item.qty}</span>
                     </td>
-                    <td>${item.time}</td>
+                    <td style="color: #666; font-size: 12px;">${item.time}</td>
                 </tr>
             `).join('');
         }
@@ -251,8 +256,8 @@
             
             const dataToExport = items.map(item => ({
                 "الباركود": item.code,
-                "العدد الكلي": item.qty,
-                "الوقت": item.time
+                "إجمالي العدد": item.qty,
+                "آخر وقت مسح": item.time
             }));
 
             const ws = XLSX.utils.json_to_sheet(dataToExport);

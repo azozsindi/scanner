@@ -42,7 +42,6 @@
             position: relative;
         }
 
-        /* تنسيق مؤشر حالة الاتصال */
         #network-status {
             font-size: 12px;
             font-weight: bold;
@@ -97,26 +96,6 @@
             text-align: center;
         }
 
-        .qty-val {
-            font-weight: bold;
-            color: var(--primary-gold);
-            font-size: 1.1em;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
-
-        .qty-btn {
-            background: #eee;
-            border: none;
-            width: 25px;
-            height: 25px;
-            border-radius: 50%;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        
         .torch-btn {
             margin-top: 10px;
             background: #444;
@@ -151,7 +130,6 @@
             <thead>
                 <tr>
                     <th>الباركود</th>
-                    <th>العدد الكلي</th>
                     <th>آخر تحديث</th>
                 </tr>
             </thead>
@@ -168,7 +146,6 @@
         let isTorchOn = false;
         const beep = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
 
-        // وظيفة تحديث حالة الشبكة
         function updateOnlineStatus() {
             const status = document.getElementById('network-status');
             if (navigator.onLine) {
@@ -243,21 +220,6 @@
             updateTable();
         }
 
-        async function adjustQty(code, amount) {
-            let item = inventory.find(i => i.code === code);
-            if (item) {
-                if (item.qty + amount <= 0) {
-                    if (!confirm("هل تريد حذف هذا العنصر؟")) return;
-                    inventory = inventory.filter(i => i.code !== code);
-                } else {
-                    item.qty += amount;
-                    item.time = new Date().toLocaleTimeString('ar-SA');
-                }
-                saveAndUpdate();
-                await syncToGoogle({ code: code, qty: amount, time: item.time });
-            }
-        }
-
         async function syncToGoogle(payload) {
             const statusIndicator = document.getElementById('status-bar');
             statusIndicator.innerText = "جاري تحديث جوجل... ⏳";
@@ -272,11 +234,11 @@
                 });
                 
                 document.body.style.backgroundColor = "var(--success-green)";
-                statusIndicator.innerText = "تم تحديث الكمية في جوجل ✅";
+                statusIndicator.innerText = "تم تحديث جوجل بنجاح ✅";
                 setTimeout(() => document.body.style.backgroundColor = "#f9f9f9", 500);
             } catch (e) {
                 document.body.style.backgroundColor = "var(--error-red)";
-                statusIndicator.innerText = "محفوظ محلياً فقط (فشل المزامنة) ❌";
+                statusIndicator.innerText = "محفوظ محلياً فقط ❌";
                 setTimeout(() => document.body.style.backgroundColor = "#f9f9f9", 500);
             }
         }
@@ -284,17 +246,12 @@
         function updateTable() {
             const tbody = document.getElementById('table-body');
             if (inventory.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3">لا توجد بيانات محفوظة</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="2">لا توجد بيانات محفوظة</td></tr>';
                 return;
             }
             tbody.innerHTML = inventory.map(item => `
                 <tr>
                     <td>${item.code}</td>
-                    <td class="qty-val">
-                        <button class="qty-btn" onclick="adjustQty('${item.code}', 1)">+</button>
-                        ${item.qty}
-                        <button class="qty-btn" onclick="adjustQty('${item.code}', -1)">-</button>
-                    </td>
                     <td>${item.time}</td>
                 </tr>
             `).join('');
@@ -309,7 +266,7 @@
         }
 
         function clearAll() {
-            if (confirm("هل أنت متأكد من مسح القائمة من الهاتف؟ (هذا لن يمسح البيانات من جوجل شيت)")) {
+            if (confirm("هل أنت متأكد من مسح القائمة من الهاتف؟")) {
                 inventory = [];
                 localStorage.removeItem('terry_data');
                 updateTable();

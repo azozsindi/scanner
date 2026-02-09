@@ -25,41 +25,32 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            min-height: 100vh;
         }
 
         .container {
             background: var(--bg-light);
-            max-width: 700px;
+            max-width: 600px;
             width: 100%;
             padding: 15px;
             border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
             text-align: center;
             box-sizing: border-box;
         }
 
-        h1 {
-            font-size: 1.2rem;
-            color: var(--text-dark);
-            margin-bottom: 15px;
-            border-bottom: 2px solid var(--primary-gold);
-            padding-bottom: 5px;
-            display: inline-block;
-        }
-
         #reader {
             width: 100%;
+            min-height: 250px;
+            background: #000;
             border-radius: 10px;
             overflow: hidden;
-            border: 2px solid var(--border-color) !important;
-            background: #f0f0f0;
+            margin-bottom: 15px;
         }
 
         .controls {
             margin: 15px 0;
             display: flex;
-            gap: 8px;
+            gap: 10px;
             justify-content: center;
             flex-wrap: wrap;
         }
@@ -68,28 +59,26 @@
             background-color: var(--primary-gold);
             color: white;
             border: none;
-            padding: 10px 18px;
+            padding: 12px 20px;
             border-radius: 8px;
             cursor: pointer;
             font-size: 14px;
             font-weight: bold;
         }
 
-        button.download-btn { background-color: #2e7d32; }
-        button.clear-btn { background-color: #888; }
-
-        .status {
+        #status {
             margin: 10px 0;
-            font-size: 13px;
-            color: #d32f2f; /* لون مميز للتنبيهات */
+            font-size: 14px;
             font-weight: bold;
+            color: #666;
+            padding: 5px;
         }
 
         table {
             width: 100%;
-            margin-top: 15px;
             border-collapse: collapse;
-            font-size: 12px;
+            margin-top: 15px;
+            background: #fff;
         }
 
         th, td {
@@ -98,13 +87,18 @@
             text-align: center;
         }
 
-        th { background-color: #fcfcfc; color: var(--primary-gold); }
-
         .qty-input {
-            width: 40px;
+            width: 45px;
             padding: 5px;
             text-align: center;
-            border: 1px solid var(--primary-gold);
+        }
+
+        /* تنسيق زر الكاميرا الكبير للجوال */
+        .start-btn {
+            background-color: #007bff;
+            padding: 15px 30px;
+            font-size: 18px;
+            margin-bottom: 10px;
         }
     </style>
 </head>
@@ -115,11 +109,12 @@
         
         <div id="reader"></div>
         
-        <div class="status" id="status">جاري تهيئة الكاميرا...</div>
+        <div id="status">اضغط على الزر الأزرق لبدء الكاميرا</div>
 
         <div class="controls">
-            <button onclick="downloadExcel()" class="download-btn">تحميل Excel</button>
-            <button onclick="clearList()" class="clear-btn">مسح الكل</button>
+            <button onclick="startCamera()" class="start-btn">تشغيل الكاميرا الآن</button>
+            <button onclick="downloadExcel()" style="background:#2e7d32;">تحميل Excel</button>
+            <button onclick="clearList()" style="background:#888;">مسح الكل</button>
         </div>
 
         <table>
@@ -130,15 +125,44 @@
                     <th>الوقت</th>
                 </tr>
             </thead>
-            <tbody id="table-body">
-            </tbody>
+            <tbody id="table-body"></tbody>
         </table>
     </div>
 
     <script>
         let scannedData = [];
+        let html5QrCode;
 
-        function onScanSuccess(decodedText, decodedResult) {
+        function startCamera() {
+            const statusDiv = document.getElementById('status');
+            
+            // تهيئة المكتبة عند الضغط
+            if (!html5QrCode) {
+                html5QrCode = new Html5Qrcode("reader");
+            }
+
+            const config = { 
+                fps: 10, 
+                qrbox: { width: 250, height: 150 },
+                aspectRatio: 1.0 
+            };
+
+            // طلب الكاميرا الخلفية
+            html5QrCode.start(
+                { facingMode: "environment" }, 
+                config, 
+                onScanSuccess
+            ).then(() => {
+                statusDiv.innerText = "تعمل الكاميرا بنجاح ✅";
+                statusDiv.style.color = "green";
+            }).catch(err => {
+                statusDiv.innerText = "خطأ: " + err;
+                statusDiv.style.color = "red";
+                console.error("Camera Error:", err);
+            });
+        }
+
+        function onScanSuccess(decodedText) {
             const now = new Date();
             const timeStr = now.toLocaleTimeString('ar-SA');
             
@@ -148,24 +172,17 @@
                 existingEntry.qty += 1;
                 existingEntry.time = timeStr;
             } else {
-                scannedData.unshift({
-                    code: decodedText,
-                    qty: 1,
-                    time: timeStr
-                });
+                scannedData.unshift({ code: decodedText, qty: 1, time: timeStr });
             }
             
             updateTable();
-            document.getElementById('status').innerText = "آخر مسح: " + decodedText;
-            document.getElementById('status').style.color = "green";
-
-            const audio = new Audio('https://www.soundjay.com/buttons/beep-07a.mp3');
-            audio.play().catch(() => {}); 
-        }
-
-        function updateQty(index, newQty) {
-            const val = parseInt(newQty);
-            if (!isNaN(val) && val >= 0) scannedData[index].qty = val;
+            document.getElementById('status').innerText = "تم مسح: " + decodedText;
+            
+            // تنبيه صوتي
+            try {
+                const audio = new Audio('https://www.soundjay.com/buttons/beep-07a.mp3');
+                audio.play();
+            } catch(e) {}
         }
 
         function updateTable() {
@@ -173,7 +190,7 @@
             tbody.innerHTML = scannedData.map((item, index) => `
                 <tr>
                     <td>${item.code}</td>
-                    <td><input type="number" class="qty-input" value="${item.qty}" onchange="updateQty(${index}, this.value)"></td>
+                    <td><input type="number" class="qty-input" value="${item.qty}" onchange="scannedData[${index}].qty=parseInt(this.value)"></td>
                     <td>${item.time}</td>
                 </tr>
             `).join('');
@@ -188,34 +205,11 @@
         }
 
         function clearList() {
-            if (confirm("هل أنت متأكد؟")) {
+            if (confirm("هل تريد مسح القائمة؟")) {
                 scannedData = [];
                 updateTable();
-                document.getElementById('status').innerText = "تم المسح.";
             }
         }
-
-        // تشغيل آمن للكاميرا لمنع الصفحة البيضاء
-        window.addEventListener('load', () => {
-            try {
-                const html5QrcodeScanner = new Html5QrcodeScanner(
-                    "reader", 
-                    { 
-                        fps: 10, 
-                        qrbox: { width: 250, height: 150 },
-                        rememberLastUsedCamera: true,
-                        supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
-                    }
-                );
-                html5QrcodeScanner.render(onScanSuccess);
-                document.getElementById('status').innerText = "جاهز للمسح";
-                document.getElementById('status').style.color = "#666";
-            } catch (e) {
-                document.getElementById('status').innerText = "خطأ في الكاميرا: تأكد من إعطاء الصلاحية";
-                console.error(e);
-            }
-        });
     </script>
-
 </body>
 </html>

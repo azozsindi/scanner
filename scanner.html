@@ -27,7 +27,6 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            transition: background-color 0.3s;
         }
 
         .container {
@@ -39,7 +38,6 @@
             box-shadow: 0 4px 20px rgba(0,0,0,0.08);
             text-align: center;
             box-sizing: border-box;
-            position: relative;
         }
 
         #network-status {
@@ -49,7 +47,6 @@
             display: inline-block;
             padding: 4px 12px;
             border-radius: 20px;
-            transition: all 0.3s;
         }
         .online { background: rgba(40, 167, 69, 0.1); color: var(--online-color); }
         .offline { background: rgba(220, 53, 69, 0.1); color: var(--offline-color); }
@@ -182,13 +179,9 @@
         async function toggleTorch() {
             try {
                 isTorchOn = !isTorchOn;
-                await html5QrCode.applyVideoConstraints({
-                    advanced: [{ torch: isTorchOn }]
-                });
+                await html5QrCode.applyVideoConstraints({ advanced: [{ torch: isTorchOn }] });
                 document.getElementById('torch-btn').innerText = isTorchOn ? "إطفاء الإضاءة 🔦" : "تشغيل الإضاءة 🔦";
-            } catch (e) {
-                alert("الفلاش غير مدعوم في هذا الجهاز");
-            }
+            } catch (e) { alert("الفلاش غير مدعوم"); }
         }
 
         async function onScanSuccess(code) {
@@ -199,22 +192,26 @@
             const now = new Date();
             const timeStr = now.toLocaleTimeString('ar-SA');
             
-            // البحث عن الباركود لتجنب تكرار الصفوف (تدبيل العدد داخلياً)
-            let existingItem = inventory.find(i => i.code === code);
+            // --- تعديل منطق التدبيل ---
+            let existingItem = inventory.find(i => i.code === String(code).trim());
+            
             if (existingItem) {
-                existingItem.qty++; // زيادة العدد (التدبيل)
+                // إذا وجد الكود، نزيد العدد ونحدث الوقت فقط
+                existingItem.qty = (existingItem.qty || 0) + 1;
                 existingItem.time = timeStr;
-                // نقل العنصر للأعلى
+                
+                // نقله لأعلى القائمة (اختياري)
                 const index = inventory.indexOf(existingItem);
                 inventory.splice(index, 1);
                 inventory.unshift(existingItem);
             } else {
-                inventory.unshift({ code: code, qty: 1, time: timeStr });
+                // كود جديد تماماً
+                inventory.unshift({ code: String(code).trim(), qty: 1, time: timeStr });
             }
             
             saveAndUpdate();
-            // إرسال "1" لجوجل شيت ليقوم السكريبت هناك بالجمع
             await syncToGoogle({ code: code, qty: 1, time: timeStr });
+            
             setTimeout(() => { isProcessing = false; }, 1200);
         }
 
@@ -226,7 +223,6 @@
         async function syncToGoogle(payload) {
             const statusIndicator = document.getElementById('status-bar');
             statusIndicator.innerText = "جاري تحديث جوجل... ⏳";
-            
             try {
                 await fetch(SCRIPT_URL, {
                     method: "POST",
@@ -235,13 +231,12 @@
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload)
                 });
-                
                 document.body.style.backgroundColor = "var(--success-green)";
-                statusIndicator.innerText = "تم تحديث جوجل بنجاح ✅";
+                statusIndicator.innerText = "تم التحديث ✅";
                 setTimeout(() => document.body.style.backgroundColor = "#f9f9f9", 500);
             } catch (e) {
                 document.body.style.backgroundColor = "var(--error-red)";
-                statusIndicator.innerText = "محفوظ محلياً فقط ❌";
+                statusIndicator.innerText = "فشل المزامنة ❌";
                 setTimeout(() => document.body.style.backgroundColor = "#f9f9f9", 500);
             }
         }
@@ -252,7 +247,7 @@
                 tbody.innerHTML = '<tr><td colspan="2">لا توجد بيانات محفوظة</td></tr>';
                 return;
             }
-            // الجدول يظهر الباركود والوقت فقط، لكن البيانات (qty) محفوظة في الخلفية
+            // الجدول الآن يعرض كل باركود فريد في سطر واحد فقط
             tbody.innerHTML = inventory.map(item => `
                 <tr>
                     <td>${item.code}</td>
@@ -263,7 +258,6 @@
 
         function downloadExcel() {
             if (inventory.length === 0) return alert("القائمة فارغة!");
-            // عند التحميل، سيظهر عمود الكمية (qty) في ملف الإكسيل بشكل صحيح
             const ws = XLSX.utils.json_to_sheet(inventory);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Inventory");
@@ -271,11 +265,11 @@
         }
 
         function clearAll() {
-            if (confirm("هل أنت متأكد من مسح القائمة من الهاتف؟")) {
+            if (confirm("هل أنت متأكد من مسح القائمة؟")) {
                 inventory = [];
                 localStorage.removeItem('terry_data');
                 updateTable();
-                document.getElementById('status-bar').innerText = "تم مسح الذاكرة المحلية";
+                document.getElementById('status-bar').innerText = "تم المسح";
             }
         }
     </script>

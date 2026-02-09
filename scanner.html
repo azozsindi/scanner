@@ -199,10 +199,12 @@
             const now = new Date();
             const timeStr = now.toLocaleTimeString('ar-SA');
             
+            // البحث عن الباركود لتجنب تكرار الصفوف (تدبيل العدد داخلياً)
             let existingItem = inventory.find(i => i.code === code);
             if (existingItem) {
-                existingItem.qty++;
+                existingItem.qty++; // زيادة العدد (التدبيل)
                 existingItem.time = timeStr;
+                // نقل العنصر للأعلى
                 const index = inventory.indexOf(existingItem);
                 inventory.splice(index, 1);
                 inventory.unshift(existingItem);
@@ -211,6 +213,7 @@
             }
             
             saveAndUpdate();
+            // إرسال "1" لجوجل شيت ليقوم السكريبت هناك بالجمع
             await syncToGoogle({ code: code, qty: 1, time: timeStr });
             setTimeout(() => { isProcessing = false; }, 1200);
         }
@@ -249,6 +252,7 @@
                 tbody.innerHTML = '<tr><td colspan="2">لا توجد بيانات محفوظة</td></tr>';
                 return;
             }
+            // الجدول يظهر الباركود والوقت فقط، لكن البيانات (qty) محفوظة في الخلفية
             tbody.innerHTML = inventory.map(item => `
                 <tr>
                     <td>${item.code}</td>
@@ -259,6 +263,7 @@
 
         function downloadExcel() {
             if (inventory.length === 0) return alert("القائمة فارغة!");
+            // عند التحميل، سيظهر عمود الكمية (qty) في ملف الإكسيل بشكل صحيح
             const ws = XLSX.utils.json_to_sheet(inventory);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Inventory");

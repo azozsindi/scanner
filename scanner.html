@@ -12,8 +12,6 @@
         :root {
             --primary-gold: #c5a059;
             --bg-light: #ffffff;
-            --success-green: rgba(46, 125, 50, 0.2);
-            --error-red: rgba(211, 47, 47, 0.2);
             --online-color: #28a745;
             --offline-color: #dc3545;
         }
@@ -93,12 +91,12 @@
         }
 
         .qty-badge {
-            background: var(--primary-gold);
-            color: white;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-weight: bold;
-            margin-right: 5px;
+            background: #000;
+            color: #fff;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-right: 8px;
         }
 
         .torch-btn {
@@ -116,15 +114,15 @@
 <body>
 
     <div class="container">
-        <div id="network-status" class="online">متصل بالإنترنت ●</div>
+        <div id="network-status" class="online">متصل ●</div>
 
         <h2 style="color: var(--primary-gold); margin-bottom: 5px;">Terry Smart Scanner 🚀</h2>
-        <div id="status-bar">نظام التجميع التلقائي مفعل</div>
+        <div id="status-bar">جاهز للمسح</div>
         
         <div id="reader"></div>
         
-        <button id="start-btn" class="btn-main" onclick="startCamera()">ابدأ المسح السريع</button>
-        <button id="torch-btn" class="torch-btn" onclick="toggleTorch()">تشغيل الإضاءة 🔦</button>
+        <button id="start-btn" class="btn-main" onclick="startCamera()">ابدأ المسح</button>
+        <button id="torch-btn" class="torch-btn" onclick="toggleTorch()">إضاءة 🔦</button>
         
         <div style="display: flex; gap: 10px; margin-top: 10px;">
             <button onclick="downloadExcel()" style="flex:1; background:#28a745; color:white; border:none; padding:10px; border-radius:5px; cursor:pointer;">Excel</button>
@@ -145,75 +143,41 @@
     <script>
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxIOyX_jvCZo5RfxnjGhqz3FhKEOVfibaTAmMXuuRT1U1vNh57QdjjkKl-NgpAnEwrRGQ/exec";
         
-        let inventory = [];
+        // استخدام Object بدلاً من Array لضمان عدم التكرار نهائياً
+        let inventoryMap = JSON.parse(localStorage.getItem('terry_map_data')) || {};
         let html5QrCode;
         let isProcessing = false;
         let isTorchOn = false;
         const beep = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
 
-        // وظيفة دمج الأكواد المتكررة في حال وجود بيانات قديمة خاطئة
-        function cleanAndLoadData() {
-            let rawData = JSON.parse(localStorage.getItem('terry_data')) || [];
-            let merged = {};
-            
-            rawData.forEach(item => {
-                let code = String(item.code).trim();
-                if (merged[code]) {
-                    merged[code].qty += (Number(item.qty) || 1);
-                } else {
-                    merged[code] = { 
-                        code: code, 
-                        qty: Number(item.qty) || 1, 
-                        time: item.time 
-                    };
-                }
-            });
-            
-            inventory = Object.values(merged).sort((a, b) => b.time.localeCompare(a.time));
-            saveToStorage();
-        }
-
         function updateOnlineStatus() {
             const status = document.getElementById('network-status');
             if (navigator.onLine) {
-                status.innerText = "متصل بالإنترنت ●";
-                status.className = "online";
+                status.innerText = "متصل ●"; status.className = "online";
             } else {
-                status.innerText = "غير متصل - حفظ محلي فقط ○";
-                status.className = "offline";
+                status.innerText = "أوفلاين ○"; status.className = "offline";
             }
         }
 
         window.addEventListener('online', updateOnlineStatus);
         window.addEventListener('offline', updateOnlineStatus);
-        
-        window.onload = () => {
-            cleanAndLoadData();
-            updateTable();
-            updateOnlineStatus();
-        };
+        window.onload = () => { updateTable(); updateOnlineStatus(); };
 
         async function startCamera() {
             html5QrCode = new Html5Qrcode("reader");
             document.getElementById('start-btn').style.display = 'none';
             try {
-                await html5QrCode.start(
-                    { facingMode: "environment" }, 
-                    { fps: 20, qrbox: { width: 250, height: 150 } }, 
-                    onScanSuccess
-                );
+                await html5QrCode.start({ facingMode: "environment" }, { fps: 20, qrbox: 250 }, onScanSuccess);
                 document.getElementById('torch-btn').style.display = 'block';
-            } catch (err) {
-                alert("خطأ في تشغيل الكاميرا: " + err);
-            }
+            } catch (err) { alert("خطأ كاميرا: " + err); }
         }
 
         async function toggleTorch() {
             try {
                 isTorchOn = !isTorchOn;
                 await html5QrCode.applyVideoConstraints({ advanced: [{ torch: isTorchOn }] });
-                document.getElementById('torch-btn').innerText = isTorchOn ? "إطفاء الإضاءة 🔦" : "تشغيل الإضاءة 🔦";
-            } catch (e) { alert("الفلاش غير مدعوم"); }
+                document.getElementById('torch-btn').innerText = isTorchOn ? "إطفاء 🔦" : "إضاءة 🔦";
+            } catch (e) { alert("لا يوجد فلاش"); }
         }
 
         async function onScanSuccess(decodedText) {
@@ -225,58 +189,44 @@
             const timeStr = now.toLocaleTimeString('ar-SA');
             const cleanCode = String(decodedText).trim();
 
-            let itemIndex = inventory.findIndex(i => String(i.code).trim() === cleanCode);
-            
-            if (itemIndex !== -1) {
-                // تجميع العدد (التدبيل الحقيقي)
-                inventory[itemIndex].qty = (Number(inventory[itemIndex].qty) || 0) + 1;
-                inventory[itemIndex].time = timeStr;
-                
-                // نقله للأعلى
-                const updatedItem = inventory.splice(itemIndex, 1)[0];
-                inventory.unshift(updatedItem);
+            // المنطق الجديد: إذا كان المفتاح موجوداً، زد القيمة، وإلا أنشئ مفتاحاً جديداً
+            if (inventoryMap[cleanCode]) {
+                inventoryMap[cleanCode].qty += 1;
+                inventoryMap[cleanCode].time = timeStr;
             } else {
-                inventory.unshift({ code: cleanCode, qty: 1, time: timeStr });
+                inventoryMap[cleanCode] = { code: cleanCode, qty: 1, time: timeStr };
             }
             
-            saveToStorage();
-            updateTable();
+            saveAndRender();
             await syncToGoogle({ code: cleanCode, qty: 1, time: timeStr });
             
             setTimeout(() => { isProcessing = false; }, 1200);
         }
 
-        function saveToStorage() {
-            localStorage.setItem('terry_data', JSON.stringify(inventory));
+        function saveAndRender() {
+            localStorage.setItem('terry_map_data', JSON.stringify(inventoryMap));
+            updateTable();
         }
 
         async function syncToGoogle(payload) {
             const statusIndicator = document.getElementById('status-bar');
-            statusIndicator.innerText = "جاري تحديث جوجل... ⏳";
+            statusIndicator.innerText = "جاري الحفظ...";
             try {
-                await fetch(SCRIPT_URL, {
-                    method: "POST",
-                    mode: "no-cors",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload)
-                });
-                document.body.style.backgroundColor = "var(--success-green)";
+                await fetch(SCRIPT_URL, { method: "POST", mode: "no-cors", body: JSON.stringify(payload) });
                 statusIndicator.innerText = "تم التحديث ✅";
-                setTimeout(() => document.body.style.backgroundColor = "#f9f9f9", 500);
-            } catch (e) {
-                document.body.style.backgroundColor = "var(--error-red)";
-                statusIndicator.innerText = "خطأ في المزامنة ❌";
-                setTimeout(() => document.body.style.backgroundColor = "#f9f9f9", 500);
-            }
+            } catch (e) { statusIndicator.innerText = "حفظ محلي ⚠️"; }
         }
 
         function updateTable() {
             const tbody = document.getElementById('table-body');
-            if (inventory.length === 0) {
+            const items = Object.values(inventoryMap).sort((a, b) => b.time.localeCompare(a.time));
+            
+            if (items.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="2">لا توجد بيانات</td></tr>';
                 return;
             }
-            tbody.innerHTML = inventory.map(item => `
+
+            tbody.innerHTML = items.map(item => `
                 <tr>
                     <td>
                         <strong>${item.code}</strong> 
@@ -288,25 +238,25 @@
         }
 
         function downloadExcel() {
-            if (inventory.length === 0) return alert("القائمة فارغة!");
+            const items = Object.values(inventoryMap);
+            if (items.length === 0) return alert("القائمة فارغة!");
             
-            // تجهيز البيانات للاكسيل لضمان ظهور عمود العدد
-            const dataToExport = inventory.map(item => ({
+            const dataToExport = items.map(item => ({
                 "الباركود": item.code,
-                "الكمية": item.qty,
-                "آخر تحديث": item.time
+                "العدد الكلي": item.qty,
+                "الوقت": item.time
             }));
 
             const ws = XLSX.utils.json_to_sheet(dataToExport);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Inventory");
-            XLSX.writeFile(wb, "Terry_Stock_Report.xlsx");
+            XLSX.writeFile(wb, "Terry_Report.xlsx");
         }
 
         function clearAll() {
-            if (confirm("سيتم مسح القائمة الحالية، هل أنت متأكد؟")) {
-                inventory = [];
-                localStorage.removeItem('terry_data');
+            if (confirm("هل تريد مسح كافة البيانات؟")) {
+                inventoryMap = {};
+                localStorage.removeItem('terry_map_data');
                 updateTable();
                 document.getElementById('status-bar').innerText = "تم المسح";
             }

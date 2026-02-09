@@ -5,11 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ماسح الباركود - مستوحى من تيري</title>
     
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <style>
-        /* الألوان المستوحاة من Terry.sa */
         :root {
             --primary-gold: #c5a059;
             --bg-light: #ffffff;
@@ -22,10 +21,11 @@
             background-color: #f9f9f9;
             color: var(--text-dark);
             margin: 0;
-            padding: 10px; /* تقليل الهوامش للجوال */
+            padding: 10px;
             display: flex;
             flex-direction: column;
             align-items: center;
+            min-height: 100vh;
         }
 
         .container {
@@ -40,12 +40,11 @@
         }
 
         h1 {
-            font-size: 1.5rem;
+            font-size: 1.2rem;
             color: var(--text-dark);
-            font-weight: 600;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             border-bottom: 2px solid var(--primary-gold);
-            padding-bottom: 10px;
+            padding-bottom: 5px;
             display: inline-block;
         }
 
@@ -54,13 +53,13 @@
             border-radius: 10px;
             overflow: hidden;
             border: 2px solid var(--border-color) !important;
-            background: #000; /* خلفية سوداء قبل تحميل الكاميرا */
+            background: #f0f0f0;
         }
 
         .controls {
-            margin-top: 20px;
+            margin: 15px 0;
             display: flex;
-            gap: 10px;
+            gap: 8px;
             justify-content: center;
             flex-wrap: wrap;
         }
@@ -69,50 +68,43 @@
             background-color: var(--primary-gold);
             color: white;
             border: none;
-            padding: 10px 20px;
-            border-radius: 50px;
+            padding: 10px 18px;
+            border-radius: 8px;
             cursor: pointer;
             font-size: 14px;
             font-weight: bold;
-            transition: opacity 0.3s;
         }
-
-        button:hover { opacity: 0.8; }
 
         button.download-btn { background-color: #2e7d32; }
-
-        #result-table {
-            width: 100%;
-            margin-top: 25px;
-            border-collapse: collapse;
-            background: white;
-            font-size: 13px; /* تصغير الخط للجوال */
-        }
-
-        #result-table th, #result-table td {
-            border: 1px solid var(--border-color);
-            padding: 8px;
-            text-align: center;
-        }
-
-        #result-table th {
-            background-color: #fcfcfc;
-            color: var(--primary-gold);
-        }
+        button.clear-btn { background-color: #888; }
 
         .status {
             margin: 10px 0;
-            font-size: 14px;
-            color: #666;
+            font-size: 13px;
+            color: #d32f2f; /* لون مميز للتنبيهات */
             font-weight: bold;
         }
 
+        table {
+            width: 100%;
+            margin-top: 15px;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        th, td {
+            border: 1px solid var(--border-color);
+            padding: 10px;
+            text-align: center;
+        }
+
+        th { background-color: #fcfcfc; color: var(--primary-gold); }
+
         .qty-input {
-            width: 45px;
+            width: 40px;
             padding: 5px;
             text-align: center;
             border: 1px solid var(--primary-gold);
-            border-radius: 4px;
         }
     </style>
 </head>
@@ -123,14 +115,14 @@
         
         <div id="reader"></div>
         
-        <div class="status" id="status">جاري طلب إذن الكاميرا...</div>
+        <div class="status" id="status">جاري تهيئة الكاميرا...</div>
 
         <div class="controls">
             <button onclick="downloadExcel()" class="download-btn">تحميل Excel</button>
-            <button onclick="clearList()" style="background:#888;">مسح القائمة</button>
+            <button onclick="clearList()" class="clear-btn">مسح الكل</button>
         </div>
 
-        <table id="result-table">
+        <table>
             <thead>
                 <tr>
                     <th>الباركود</th>
@@ -155,28 +147,25 @@
             if (existingEntry) {
                 existingEntry.qty += 1;
                 existingEntry.time = timeStr;
-                document.getElementById('status').innerText = "تحديث: " + decodedText;
             } else {
-                const entry = {
+                scannedData.unshift({
                     code: decodedText,
                     qty: 1,
                     time: timeStr
-                };
-                scannedData.unshift(entry);
-                document.getElementById('status').innerText = "جديد: " + decodedText;
+                });
             }
             
             updateTable();
-            
+            document.getElementById('status').innerText = "آخر مسح: " + decodedText;
+            document.getElementById('status').style.color = "green";
+
             const audio = new Audio('https://www.soundjay.com/buttons/beep-07a.mp3');
-            audio.play().catch(e => console.log("Audio play blocked"));
+            audio.play().catch(() => {}); 
         }
 
         function updateQty(index, newQty) {
             const val = parseInt(newQty);
-            if (!isNaN(val) && val >= 0) {
-                scannedData[index].qty = val;
-            }
+            if (!isNaN(val) && val >= 0) scannedData[index].qty = val;
         }
 
         function updateTable() {
@@ -184,62 +173,48 @@
             tbody.innerHTML = scannedData.map((item, index) => `
                 <tr>
                     <td>${item.code}</td>
-                    <td>
-                        <input type="number" class="qty-input" 
-                               value="${item.qty}" 
-                               onchange="updateQty(${index}, this.value)">
-                    </td>
+                    <td><input type="number" class="qty-input" value="${item.qty}" onchange="updateQty(${index}, this.value)"></td>
                     <td>${item.time}</td>
                 </tr>
             `).join('');
         }
 
         function downloadExcel() {
-            if (scannedData.length === 0) {
-                alert("لا توجد بيانات!");
-                return;
-            }
-            const dataToExport = scannedData.map(item => ({
-                "الباركود": item.code,
-                "الكمية": item.qty,
-                "آخر وقت": item.time
-            }));
-            const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-            const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, "Barcodes");
-            XLSX.writeFile(workbook, "Inventory.xlsx");
+            if (scannedData.length === 0) return alert("القائمة فارغة!");
+            const ws = XLSX.utils.json_to_sheet(scannedData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Inventory");
+            XLSX.writeFile(wb, "Barcodes.xlsx");
         }
 
         function clearList() {
-            if (confirm("مسح الكل؟")) {
+            if (confirm("هل أنت متأكد؟")) {
                 scannedData = [];
                 updateTable();
-                document.getElementById('status').innerText = "تم مسح القائمة.";
+                document.getElementById('status').innerText = "تم المسح.";
             }
         }
 
-        // إعدادات الكاميرا للجوال
-        const html5QrcodeScanner = new Html5QrcodeScanner(
-            "reader", 
-            { 
-                fps: 15, 
-                qrbox: { width: 250, height: 150 }, // حجم صندوق المسح
-                aspectRatio: 1.0,
-                showTorchButtonIfSupported: true // زر الكشاف للجوال
-            },
-            /* verbose= */ false
-        );
-
-        html5QrcodeScanner.render(onScanSuccess, (errorMessage) => {
-            // تجاهل أخطاء البحث المستمر لتجنب تجميد الجوال
-        });
-
-        // التأكد من أن حالة الكاميرا تظهر للمستخدم
-        setTimeout(() => {
-            if (document.getElementById('reader__status_span')) {
+        // تشغيل آمن للكاميرا لمنع الصفحة البيضاء
+        window.addEventListener('load', () => {
+            try {
+                const html5QrcodeScanner = new Html5QrcodeScanner(
+                    "reader", 
+                    { 
+                        fps: 10, 
+                        qrbox: { width: 250, height: 150 },
+                        rememberLastUsedCamera: true,
+                        supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
+                    }
+                );
+                html5QrcodeScanner.render(onScanSuccess);
                 document.getElementById('status').innerText = "جاهز للمسح";
+                document.getElementById('status').style.color = "#666";
+            } catch (e) {
+                document.getElementById('status').innerText = "خطأ في الكاميرا: تأكد من إعطاء الصلاحية";
+                console.error(e);
             }
-        }, 2000);
+        });
     </script>
 
 </body>

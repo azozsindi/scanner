@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ماسح الباركود - Terry Cloud</title>
+    <title>Terry Smart Scanner</title>
     
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -13,116 +13,104 @@
             --primary-gold: #c5a059;
             --bg-light: #ffffff;
             --text-dark: #333333;
-            --border-color: #eeeeee;
-            --success-green: rgba(46, 125, 50, 0.2);
-            --error-red: rgba(211, 47, 47, 0.2);
+            --success-green: rgba(212, 237, 218, 0.6);
+            --error-red: rgba(248, 215, 218, 0.6);
         }
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #f9f9f9;
-            color: var(--text-dark);
             margin: 0;
             padding: 10px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            min-height: 100vh;
-            transition: background-color 0.3s ease; /* لإضافة تأثير الوميض */
+            transition: background-color 0.4s;
         }
 
         .container {
             background: var(--bg-light);
-            max-width: 600px;
+            max-width: 500px;
             width: 100%;
-            padding: 15px;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
             text-align: center;
             box-sizing: border-box;
         }
 
         #reader {
             width: 100%;
-            min-height: 250px;
             background: #000;
-            border-radius: 10px;
+            border-radius: 12px;
             overflow: hidden;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
 
-        .controls {
-            margin: 15px 0;
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        button {
+        .btn-main {
             background-color: var(--primary-gold);
             color: white;
             border: none;
-            padding: 12px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
+            padding: 15px;
+            border-radius: 10px;
             font-weight: bold;
+            width: 100%;
+            font-size: 16px;
+            cursor: pointer;
         }
 
-        #status {
-            margin: 10px 0;
-            font-size: 14px;
+        #status-bar {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 8px;
             font-weight: bold;
+            font-size: 14px;
+            color: #555;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 15px;
-            background: #fff;
+            margin-top: 20px;
         }
 
         th, td {
-            border: 1px solid var(--border-color);
-            padding: 10px;
+            border-bottom: 1px solid #eee;
+            padding: 12px;
+            font-size: 14px;
             text-align: center;
         }
 
-        .btn-start { background-color: #007bff; width: 100%; padding: 15px; font-size: 16px; }
-        
-        /* حالة المزامنة */
-        .sync-indicator {
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-size: 12px;
-            display: inline-block;
-            margin-top: 5px;
+        .qty-badge {
+            background-color: var(--primary-gold);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 5px;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h1>ماسح Terry السريع</h1>
+        <h2 style="color: var(--primary-gold); margin-bottom: 5px;">Terry Scanner 🚀</h2>
+        <div id="status-bar">جاهز للمسح وتجميع الكميات</div>
         
         <div id="reader"></div>
-        
-        <div id="status">جاهز للمسح التلقائي</div>
-        <div id="sync-status" class="sync-indicator"></div>
 
-        <div class="controls">
-            <button id="start-button" onclick="startCamera()" class="btn-start">🚀 ابدأ المسح</button>
-            <button onclick="downloadExcel()" style="background:#2e7d32;">تحميل Excel</button>
-            <button onclick="clearList()" style="background:#888;">مسح الكل</button>
+        <button id="start-btn" class="btn-main" onclick="startCamera()">تفعيل الكاميرا والبدء</button>
+        
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
+            <button onclick="downloadExcel()" style="flex:1; background:#28a745; color:white; border:none; padding:10px; border-radius:5px; cursor:pointer;">Excel</button>
+            <button onclick="clearAll()" style="flex:1; background:#dc3545; color:white; border:none; padding:10px; border-radius:5px; cursor:pointer;">مسح الكل</button>
         </div>
 
         <table>
             <thead>
                 <tr>
-                    <th>الباركود</th>
+                    <th>باركود</th>
                     <th>العدد</th>
-                    <th>آخر وقت</th>
+                    <th>الوقت</th>
                 </tr>
             </thead>
             <tbody id="table-body"></tbody>
@@ -130,122 +118,112 @@
     </div>
 
     <script>
-        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw79jBnbFC-oIJX-OKzVwQBXnToIrjXJTC2msv-hf25Hire6dQSr09kvZSAx2OslFPviw/exec";
-
-        function getSavedData() {
-            const data = localStorage.getItem('inventory_v1');
-            return data ? JSON.parse(data) : [];
-        }
-
-        let scannedData = getSavedData();
+        // رابط النشر الجديد الخاص بك
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwt2ABhJFdH6UDk3e4VE2IhV_Mp6cF_LRgUXd7O1gpyslbZxZvIK-i5i_dBHwzcacG3gQ/exec";
+        
+        let inventory = JSON.parse(localStorage.getItem('terry_data')) || [];
         let html5QrCode;
-        let isProcessing = false; // لمنع المسح المزدوج في نفس اللحظة
+        let isBusy = false;
+        const beep = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
 
-        const beepSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-
-        window.addEventListener('DOMContentLoaded', updateTable);
+        window.onload = updateTable;
 
         async function startCamera() {
-            if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
-            document.getElementById('start-button').style.display = 'none';
-            
+            html5QrCode = new Html5Qrcode("reader");
+            document.getElementById('start-btn').style.display = 'none';
             try {
                 await html5QrCode.start(
                     { facingMode: "environment" }, 
-                    { fps: 20, qrbox: { width: 250, height: 150 } },
-                    onScanSuccess
+                    { fps: 20, qrbox: { width: 250, height: 150 } }, 
+                    onScan
                 );
             } catch (err) {
-                alert("خطأ في الكاميرا: " + err);
+                alert("تعذر تشغيل الكاميرا: " + err);
             }
         }
 
-        async function onScanSuccess(decodedText) {
-            if (isProcessing) return; 
-            isProcessing = true; 
+        async function onScan(code) {
+            if (isBusy) return;
+            isBusy = true;
+            beep.play().catch(() => {});
 
-            beepSound.play().catch(() => {});
-
-            const now = new Date();
-            const timeStr = now.toLocaleTimeString('ar-SA');
+            const time = new Date().toLocaleTimeString('ar-SA');
             
-            // 1. تحديث البيانات محلياً (زيادة 1 تلقائياً)
-            const existingItem = scannedData.find(item => item.code === decodedText);
-            if (existingItem) {
-                existingItem.qty += 1;
-                existingItem.time = timeStr;
-                const index = scannedData.indexOf(existingItem);
-                scannedData.splice(index, 1);
-                scannedData.unshift(existingItem);
+            // 1. التجميع المحلي (في المتصفح)
+            let item = inventory.find(i => i.code === code);
+            if (item) {
+                item.qty++;
+                item.time = time;
+                // تحريك السطر المحدث للأعلى
+                const index = inventory.indexOf(item);
+                inventory.splice(index, 1);
+                inventory.unshift(item);
             } else {
-                scannedData.unshift({ code: decodedText, qty: 1, time: timeStr });
+                inventory.unshift({ code, qty: 1, time });
             }
             
-            localStorage.setItem('inventory_v1', JSON.stringify(scannedData));
+            save();
             updateTable();
-
-            // 2. محاولة المزامنة مع جوجل
-            const syncEntry = { code: decodedText, qty: 1, time: timeStr };
-            await sendToGoogleSheets(syncEntry);
-
-            // إتاحة المسح التالي بعد ثانية واحدة لمنع تكرار نفس المنتج بالخطأ
-            setTimeout(() => { isProcessing = false; }, 1000);
+            
+            // 2. المزامنة مع جوجل شيت
+            await syncToGoogle({ code, qty: 1, time });
+            
+            // منع التكرار السريع جداً (ثانية واحدة انتظار)
+            setTimeout(() => { isBusy = false; }, 1200);
         }
 
-        async function sendToGoogleSheets(entry) {
-            const indicator = document.getElementById('sync-status');
+        async function syncToGoogle(payload) {
+            const bar = document.getElementById('status-bar');
+            bar.innerText = "جاري المزامنة... ⏳";
             
             try {
-                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                await fetch(SCRIPT_URL, {
                     method: "POST",
                     mode: "no-cors",
+                    cache: "no-cache",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(entry)
+                    body: JSON.stringify(payload)
                 });
-
-                // تأثير النجاح (أخضر خافت)
+                
+                // تأثير الوميض الأخضر (تمت المزامنة)
                 document.body.style.backgroundColor = "var(--success-green)";
-                indicator.innerText = "تمت المزامنة بنجاح ✅";
-                indicator.style.color = "#2e7d32";
-                
-                setTimeout(() => { document.body.style.backgroundColor = "#f9f9f9"; }, 500);
-            } catch (error) {
-                // تأثير الفشل (أحمر خافت)
+                bar.innerText = "تم التحديث في جوجل شيت ✅";
+                setTimeout(() => document.body.style.backgroundColor = "#f9f9f9", 500);
+            } catch (e) {
+                // تأثير الوميض الأحمر (خطأ)
                 document.body.style.backgroundColor = "var(--error-red)";
-                indicator.innerText = "فشلت المزامنة مع جوجل ❌";
-                indicator.style.color = "#d32f2f";
-                
-                setTimeout(() => { document.body.style.backgroundColor = "#f9f9f9"; }, 500);
+                bar.innerText = "فشل الاتصال بجوجل! ❌";
+                setTimeout(() => document.body.style.backgroundColor = "#f9f9f9", 500);
             }
         }
 
+        function save() { localStorage.setItem('terry_data', JSON.stringify(inventory)); }
+        
         function updateTable() {
-            const tbody = document.getElementById('table-body');
-            if (scannedData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3">لا توجد بيانات</td></tr>';
-                return;
-            }
-            tbody.innerHTML = scannedData.map((item) => `
+            const html = inventory.map(i => `
                 <tr>
-                    <td>${item.code}</td>
-                    <td><strong>${item.qty}</strong></td>
-                    <td>${item.time}</td>
+                    <td>${i.code}</td>
+                    <td><span class="qty-badge">${i.qty}</span></td>
+                    <td>${i.time}</td>
                 </tr>
             `).join('');
+            document.getElementById('table-body').innerHTML = html || '<tr><td colspan="3">لا توجد بيانات</td></tr>';
         }
 
         function downloadExcel() {
-            const ws = XLSX.utils.json_to_sheet(scannedData);
+            if (inventory.length === 0) return alert("القائمة فارغة!");
+            const ws = XLSX.utils.json_to_sheet(inventory);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Inventory");
-            XLSX.writeFile(wb, "Inventory_Backup.xlsx");
+            XLSX.writeFile(wb, "Terry_Inventory_Backup.xlsx");
         }
 
-        function clearList() {
-            if (confirm("هل تريد مسح القائمة من الهاتف؟")) {
-                scannedData = [];
-                localStorage.removeItem('inventory_v1');
+        function clearAll() {
+            if (confirm("سيتم حذف جميع البيانات من الهاتف فقط. هل أنت متأكد؟")) {
+                inventory = [];
+                save();
                 updateTable();
+                document.getElementById('status-bar').innerText = "تم مسح القائمة المحلية";
             }
         }
     </script>

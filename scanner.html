@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ماسح الباركود - مستوحى من تيري</title>
+    <title>ماسح الباركود - Terry</title>
     
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -25,6 +25,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            min-height: 100vh;
         }
 
         .container {
@@ -71,7 +72,6 @@
             font-size: 14px;
             font-weight: bold;
             color: #666;
-            padding: 5px;
         }
 
         table {
@@ -87,32 +87,20 @@
             text-align: center;
         }
 
-        .qty-input {
-            width: 45px;
-            padding: 5px;
-            text-align: center;
-        }
-
-        /* تنسيق زر الكاميرا الكبير للجوال */
-        .start-btn {
-            background-color: #007bff;
-            padding: 15px 30px;
-            font-size: 18px;
-            margin-bottom: 10px;
-        }
+        .btn-start { background-color: #007bff; width: 100%; padding: 15px; font-size: 16px; }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h1>ماسح الباركود الذكي</h1>
+        <h1>ماسح الباركود - إدخال يدوي</h1>
         
         <div id="reader"></div>
         
-        <div id="status">اضغط على الزر الأزرق لبدء الكاميرا</div>
+        <div id="status">اضغط ابدأ لبدء المسح</div>
 
         <div class="controls">
-            <button onclick="startCamera()" class="start-btn">تشغيل الكاميرا الآن</button>
+            <button id="start-button" onclick="startCamera()" class="btn-start">🚀 ابدأ المسح</button>
             <button onclick="downloadExcel()" style="background:#2e7d32;">تحميل Excel</button>
             <button onclick="clearList()" style="background:#888;">مسح الكل</button>
         </div>
@@ -132,57 +120,62 @@
     <script>
         let scannedData = [];
         let html5QrCode;
+        let isScanning = true; // للتحكم في وقف المسح مؤقتاً عند ظهور النافذة
 
-        function startCamera() {
-            const statusDiv = document.getElementById('status');
-            
-            // تهيئة المكتبة عند الضغط
+        // صوت بييب حقيقي ونظيف
+        const beepSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+
+        async function startCamera() {
             if (!html5QrCode) {
                 html5QrCode = new Html5Qrcode("reader");
             }
-
-            const config = { 
-                fps: 10, 
-                qrbox: { width: 250, height: 150 },
-                aspectRatio: 1.0 
-            };
-
-            // طلب الكاميرا الخلفية
-            html5QrCode.start(
-                { facingMode: "environment" }, 
-                config, 
-                onScanSuccess
-            ).then(() => {
-                statusDiv.innerText = "تعمل الكاميرا بنجاح ✅";
-                statusDiv.style.color = "green";
-            }).catch(err => {
-                statusDiv.innerText = "خطأ: " + err;
-                statusDiv.style.color = "red";
-                console.error("Camera Error:", err);
-            });
+            document.getElementById('start-button').style.display = 'none';
+            
+            try {
+                await html5QrCode.start(
+                    { facingMode: "environment" }, 
+                    { fps: 10, qrbox: { width: 250, height: 150 } },
+                    onScanSuccess
+                );
+                document.getElementById('status').innerText = "وجه الكاميرا نحو الباركود";
+            } catch (err) {
+                alert("خطأ في الكاميرا: " + err);
+            }
         }
 
-        function onScanSuccess(decodedText) {
-            const now = new Date();
-            const timeStr = now.toLocaleTimeString('ar-SA');
+        async function onScanSuccess(decodedText) {
+            if (!isScanning) return; // توقف لو في نافذة مفتوحة
             
-            const existingEntry = scannedData.find(item => item.code === decodedText);
+            isScanning = false; // وقف المسح فوراً
+            beepSound.play().catch(() => {}); // تشغيل الصوت
 
-            if (existingEntry) {
-                existingEntry.qty += 1;
-                existingEntry.time = timeStr;
-            } else {
-                scannedData.unshift({ code: decodedText, qty: 1, time: timeStr });
-            }
-            
-            updateTable();
-            document.getElementById('status').innerText = "تم مسح: " + decodedText;
-            
-            // تنبيه صوتي
-            try {
-                const audio = new Audio('https://www.soundjay.com/buttons/beep-07a.mp3');
-                audio.play();
-            } catch(e) {}
+            // إظهار نافذة إدخال الكمية
+            // setTimeout لضمان عدم حدوث تداخل مع المتصفح
+            setTimeout(() => {
+                let qty = prompt(`تم مسح الباركود:\n${decodedText}\n\nأدخل الكمية:`, "1");
+                
+                if (qty !== null && qty !== "") {
+                    let quantity = parseInt(qty) || 1;
+                    
+                    // إضافة البيانات للمصفوفة
+                    const now = new Date();
+                    const timeStr = now.toLocaleTimeString('ar-SA');
+                    
+                    scannedData.unshift({
+                        code: decodedText,
+                        qty: quantity,
+                        time: timeStr
+                    });
+                    
+                    updateTable();
+                    document.getElementById('status').innerText = "تمت الإضافة بنجاح ✅";
+                } else {
+                    document.getElementById('status').innerText = "تم إلغاء الإضافة";
+                }
+
+                // العودة للمسح بعد الضغط على موافق أو إلغاء
+                isScanning = true; 
+            }, 100);
         }
 
         function updateTable() {
@@ -190,22 +183,22 @@
             tbody.innerHTML = scannedData.map((item, index) => `
                 <tr>
                     <td>${item.code}</td>
-                    <td><input type="number" class="qty-input" value="${item.qty}" onchange="scannedData[${index}].qty=parseInt(this.value)"></td>
+                    <td>${item.qty}</td>
                     <td>${item.time}</td>
                 </tr>
             `).join('');
         }
 
         function downloadExcel() {
-            if (scannedData.length === 0) return alert("القائمة فارغة!");
+            if (scannedData.length === 0) return alert("لا توجد بيانات!");
             const ws = XLSX.utils.json_to_sheet(scannedData);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Inventory");
-            XLSX.writeFile(wb, "Barcodes.xlsx");
+            XLSX.writeFile(wb, "Inventory.xlsx");
         }
 
         function clearList() {
-            if (confirm("هل تريد مسح القائمة؟")) {
+            if (confirm("هل تريد مسح القائمة بالكامل؟")) {
                 scannedData = [];
                 updateTable();
             }

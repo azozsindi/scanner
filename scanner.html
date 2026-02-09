@@ -93,7 +93,7 @@
 <body>
 
     <div class="container">
-        <h1>ماسح الباركود - إدخال يدوي</h1>
+        <h1>ماسح الباركود - تجميع المنتجات</h1>
         
         <div id="reader"></div>
         
@@ -109,8 +109,8 @@
             <thead>
                 <tr>
                     <th>الباركود</th>
-                    <th>الكمية</th>
-                    <th>الوقت</th>
+                    <th>الكمية الإجمالية</th>
+                    <th>آخر تحديث</th>
                 </tr>
             </thead>
             <tbody id="table-body"></tbody>
@@ -120,9 +120,8 @@
     <script>
         let scannedData = [];
         let html5QrCode;
-        let isScanning = true; // للتحكم في وقف المسح مؤقتاً عند ظهور النافذة
+        let isScanning = true;
 
-        // صوت بييب حقيقي ونظيف
         const beepSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
 
         async function startCamera() {
@@ -144,46 +143,59 @@
         }
 
         async function onScanSuccess(decodedText) {
-            if (!isScanning) return; // توقف لو في نافذة مفتوحة
+            if (!isScanning) return; 
             
-            isScanning = false; // وقف المسح فوراً
-            beepSound.play().catch(() => {}); // تشغيل الصوت
+            isScanning = false; 
+            beepSound.play().catch(() => {}); 
 
-            // إظهار نافذة إدخال الكمية
-            // setTimeout لضمان عدم حدوث تداخل مع المتصفح
             setTimeout(() => {
-                let qty = prompt(`تم مسح الباركود:\n${decodedText}\n\nأدخل الكمية:`, "1");
+                let qtyInput = prompt(`الباركود: ${decodedText}\nأدخل الكمية لإضافتها:`, "1");
                 
-                if (qty !== null && qty !== "") {
-                    let quantity = parseInt(qty) || 1;
+                if (qtyInput !== null && qtyInput !== "") {
+                    let addedQuantity = parseInt(qtyInput) || 0;
                     
-                    // إضافة البيانات للمصفوفة
-                    const now = new Date();
-                    const timeStr = now.toLocaleTimeString('ar-SA');
-                    
-                    scannedData.unshift({
-                        code: decodedText,
-                        qty: quantity,
-                        time: timeStr
-                    });
-                    
-                    updateTable();
-                    document.getElementById('status').innerText = "تمت الإضافة بنجاح ✅";
+                    if (addedQuantity > 0) {
+                        const now = new Date();
+                        const timeStr = now.toLocaleTimeString('ar-SA');
+                        
+                        // البحث عن المنتج إذا كان موجوداً مسبقاً
+                        const existingItem = scannedData.find(item => item.code === decodedText);
+                        
+                        if (existingItem) {
+                            // زيادة الكمية على السطر الموجود
+                            existingItem.qty += addedQuantity;
+                            existingItem.time = timeStr;
+                            
+                            // تحريك السطر المحدث للأعلى (اختياري، لسهولة الرؤية)
+                            const index = scannedData.indexOf(existingItem);
+                            scannedData.splice(index, 1);
+                            scannedData.unshift(existingItem);
+                        } else {
+                            // إضافة منتج جديد تماماً
+                            scannedData.unshift({
+                                code: decodedText,
+                                qty: addedQuantity,
+                                time: timeStr
+                            });
+                        }
+                        
+                        updateTable();
+                        document.getElementById('status').innerText = "تم تحديث الكمية ✅";
+                    }
                 } else {
-                    document.getElementById('status').innerText = "تم إلغاء الإضافة";
+                    document.getElementById('status').innerText = "تم إلغاء الإدخال";
                 }
 
-                // العودة للمسح بعد الضغط على موافق أو إلغاء
                 isScanning = true; 
             }, 100);
         }
 
         function updateTable() {
             const tbody = document.getElementById('table-body');
-            tbody.innerHTML = scannedData.map((item, index) => `
+            tbody.innerHTML = scannedData.map((item) => `
                 <tr>
                     <td>${item.code}</td>
-                    <td>${item.qty}</td>
+                    <td><strong>${item.qty}</strong></td>
                     <td>${item.time}</td>
                 </tr>
             `).join('');
@@ -194,13 +206,14 @@
             const ws = XLSX.utils.json_to_sheet(scannedData);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Inventory");
-            XLSX.writeFile(wb, "Inventory.xlsx");
+            XLSX.writeFile(wb, "Inventory_Report.xlsx");
         }
 
         function clearList() {
             if (confirm("هل تريد مسح القائمة بالكامل؟")) {
                 scannedData = [];
                 updateTable();
+                document.getElementById('status').innerText = "تم مسح القائمة.";
             }
         }
     </script>

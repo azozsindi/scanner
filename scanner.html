@@ -15,6 +15,8 @@
             --text-dark: #333333;
             --success-green: rgba(46, 125, 50, 0.2);
             --error-red: rgba(211, 47, 47, 0.2);
+            --online-color: #28a745;
+            --offline-color: #dc3545;
         }
 
         body {
@@ -37,7 +39,21 @@
             box-shadow: 0 4px 20px rgba(0,0,0,0.08);
             text-align: center;
             box-sizing: border-box;
+            position: relative;
         }
+
+        /* تنسيق مؤشر حالة الاتصال */
+        #network-status {
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            transition: all 0.3s;
+        }
+        .online { background: rgba(40, 167, 69, 0.1); color: var(--online-color); }
+        .offline { background: rgba(220, 53, 69, 0.1); color: var(--offline-color); }
 
         #reader {
             width: 100%;
@@ -85,18 +101,46 @@
             font-weight: bold;
             color: var(--primary-gold);
             font-size: 1.1em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .qty-btn {
+            background: #eee;
+            border: none;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .torch-btn {
+            margin-top: 10px;
+            background: #444;
+            color: white;
+            border: none;
+            padding: 8px;
+            border-radius: 5px;
+            display: none;
+            width: 100%;
         }
     </style>
 </head>
 <body>
 
     <div class="container">
+        <div id="network-status" class="online">متصل بالإنترنت ●</div>
+
         <h2 style="color: var(--primary-gold); margin-bottom: 5px;">Terry Smart Scanner 🚀</h2>
         <div id="status-bar">نظام التجميع التلقائي مفعل</div>
         
         <div id="reader"></div>
-
+        
         <button id="start-btn" class="btn-main" onclick="startCamera()">ابدأ المسح السريع</button>
+        <button id="torch-btn" class="torch-btn" onclick="toggleTorch()">تشغيل الإضاءة 🔦</button>
         
         <div style="display: flex; gap: 10px; margin-top: 10px;">
             <button onclick="downloadExcel()" style="flex:1; background:#28a745; color:white; border:none; padding:10px; border-radius:5px; cursor:pointer;">Excel</button>
@@ -116,15 +160,32 @@
     </div>
 
     <script>
-        // الرابط الجديد الخاص بك
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxIOyX_jvCZo5RfxnjGhqz3FhKEOVfibaTAmMXuuRT1U1vNh57QdjjkKl-NgpAnEwrRGQ/exec";
         
         let inventory = JSON.parse(localStorage.getItem('terry_data')) || [];
         let html5QrCode;
         let isProcessing = false;
+        let isTorchOn = false;
         const beep = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
 
-        window.onload = updateTable;
+        // وظيفة تحديث حالة الشبكة
+        function updateOnlineStatus() {
+            const status = document.getElementById('network-status');
+            if (navigator.onLine) {
+                status.innerText = "متصل بالإنترنت ●";
+                status.className = "online";
+            } else {
+                status.innerText = "غير متصل - حفظ محلي فقط ○";
+                status.className = "offline";
+            }
+        }
+
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+        window.onload = () => {
+            updateTable();
+            updateOnlineStatus();
+        };
 
         async function startCamera() {
             html5QrCode = new Html5Qrcode("reader");
@@ -135,8 +196,21 @@
                     { fps: 20, qrbox: { width: 250, height: 150 } }, 
                     onScanSuccess
                 );
+                document.getElementById('torch-btn').style.display = 'block';
             } catch (err) {
                 alert("خطأ في تشغيل الكاميرا: " + err);
+            }
+        }
+
+        async function toggleTorch() {
+            try {
+                isTorchOn = !isTorchOn;
+                await html5QrCode.applyVideoConstraints({
+                    advanced: [{ torch: isTorchOn }]
+                });
+                document.getElementById('torch-btn').innerText = isTorchOn ? "إطفاء الإضاءة 🔦" : "تشغيل الإضاءة 🔦";
+            } catch (e) {
+                alert("الفلاش غير مدعوم في هذا الجهاز");
             }
         }
 
@@ -145,16 +219,13 @@
             isProcessing = true;
             
             beep.play().catch(() => {});
-
             const now = new Date();
             const timeStr = now.toLocaleTimeString('ar-SA');
             
-            // 1. التجميع في ذاكرة المتصفح (الجوال)
             let existingItem = inventory.find(i => i.code === code);
             if (existingItem) {
                 existingItem.qty++;
                 existingItem.time = timeStr;
-                // نقل المنتج المحدث للأعلى في الجدول
                 const index = inventory.indexOf(existingItem);
                 inventory.splice(index, 1);
                 inventory.unshift(existingItem);
@@ -162,14 +233,29 @@
                 inventory.unshift({ code: code, qty: 1, time: timeStr });
             }
             
+            saveAndUpdate();
+            await syncToGoogle({ code: code, qty: 1, time: timeStr });
+            setTimeout(() => { isProcessing = false; }, 1200);
+        }
+
+        function saveAndUpdate() {
             localStorage.setItem('terry_data', JSON.stringify(inventory));
             updateTable();
+        }
 
-            // 2. إرسال أمر "إضافة 1" إلى جوجل شيت
-            await syncToGoogle({ code: code, qty: 1, time: timeStr });
-            
-            // انتظار ثانية قبل السماح بالمسحة التالية لمنع الاهتزاز
-            setTimeout(() => { isProcessing = false; }, 1200);
+        async function adjustQty(code, amount) {
+            let item = inventory.find(i => i.code === code);
+            if (item) {
+                if (item.qty + amount <= 0) {
+                    if (!confirm("هل تريد حذف هذا العنصر؟")) return;
+                    inventory = inventory.filter(i => i.code !== code);
+                } else {
+                    item.qty += amount;
+                    item.time = new Date().toLocaleTimeString('ar-SA');
+                }
+                saveAndUpdate();
+                await syncToGoogle({ code: code, qty: amount, time: item.time });
+            }
         }
 
         async function syncToGoogle(payload) {
@@ -185,12 +271,10 @@
                     body: JSON.stringify(payload)
                 });
                 
-                // وميض أخضر خفيف للنجاح
                 document.body.style.backgroundColor = "var(--success-green)";
                 statusIndicator.innerText = "تم تحديث الكمية في جوجل ✅";
                 setTimeout(() => document.body.style.backgroundColor = "#f9f9f9", 500);
             } catch (e) {
-                // وميض أحمر خفيف للفشل
                 document.body.style.backgroundColor = "var(--error-red)";
                 statusIndicator.innerText = "محفوظ محلياً فقط (فشل المزامنة) ❌";
                 setTimeout(() => document.body.style.backgroundColor = "#f9f9f9", 500);
@@ -206,7 +290,11 @@
             tbody.innerHTML = inventory.map(item => `
                 <tr>
                     <td>${item.code}</td>
-                    <td class="qty-val">${item.qty}</td>
+                    <td class="qty-val">
+                        <button class="qty-btn" onclick="adjustQty('${item.code}', 1)">+</button>
+                        ${item.qty}
+                        <button class="qty-btn" onclick="adjustQty('${item.code}', -1)">-</button>
+                    </td>
                     <td>${item.time}</td>
                 </tr>
             `).join('');
